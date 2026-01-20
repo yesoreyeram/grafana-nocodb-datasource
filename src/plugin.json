@@ -1,0 +1,46 @@
+{
+  "$schema": "https://raw.githubusercontent.com/grafana/grafana/master/docs/sources/developers/plugins/plugin.schema.json",
+  "type": "datasource",
+  "name": "NocoDB",
+  "id": "grafana-nocodb-datasource",
+  "metrics": true,
+  "tables": true,
+  "logs": false,
+  "annotations": false,
+  "alerting": false,
+  "backend": true,
+  "executable": "gpx_nocodb",
+  "info": {
+    "description": "Enterprise-ready datasource plugin for querying NocoDB databases with full CRUD operations support",
+    "author": {
+      "name": "Your Organization",
+      "url": "https://github.com/yourusername"
+    },
+    "keywords": ["nocodb", "datasource", "database", "airtable", "low-code", "no-code"],
+    "logos": {
+      "small": "img/logo.svg",
+      "large": "img/logo.svg"
+    },
+    "links": [
+      {
+        "name": "GitHub",
+        "url": "https://github.com/yourusername/grafana-nocodb-datasource"
+      },
+      {
+        "name": "Documentation",
+        "url": "https://github.com/yourusername/grafana-nocodb-datasource/blob/main/README.md"
+      },
+      {
+        "name": "License",
+        "url": "https://github.com/yourusername/grafana-nocodb-datasource/blob/main/LICENSE"
+      }
+    ],
+    "screenshots": [],
+    "version": "%VERSION%",
+    "updated": "%TODAY%"
+  },
+  "dependencies": {
+    "grafanaDependency": ">=9.0.0",
+    "plugins": []
+  }
+}
