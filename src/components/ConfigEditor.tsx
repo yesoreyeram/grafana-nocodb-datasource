@@ -41,7 +41,11 @@ export function ConfigEditor(props: Props) {
 
   const onBaseURLChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
-      const value = event.target.value;
+      let value = event.target.value;
+      // Normalize: trim trailing slashes
+      if (value.endsWith('/')) {
+        value = value.replace(/\/+$/, '');
+      }
       onOptionsChange({
         ...options,
         jsonData: { ...jsonData, baseURL: value },
@@ -91,16 +95,9 @@ export function ConfigEditor(props: Props) {
       setBaseURLError('URL must start with http:// or https://');
       return false;
     }
-    // Check for trailing slash and trim it
-    if (url.endsWith('/')) {
-      onOptionsChange({
-        ...options,
-        jsonData: { ...jsonData, baseURL: url.replace(/\/+$/, '') },
-      });
-    }
     setBaseURLError('');
     return true;
-  }, [jsonData, onOptionsChange, options]);
+  }, [jsonData]);
 
   const validateAPIToken = useCallback((): boolean => {
     const isConfigured = secureJsonFields?.apiToken ?? false;
@@ -110,7 +107,7 @@ export function ConfigEditor(props: Props) {
       return false;
     }
     if (!isConfigured && token.trim().length < 8) {
-      setApiTokenError('API token seems too short');
+      setApiTokenError('API token must be at least 8 characters long');
       return false;
     }
     setApiTokenError('');
@@ -208,7 +205,7 @@ export function ConfigEditor(props: Props) {
         {steps.map((step, index) => {
           const isActive = activeStep === index;
           const isCompleted = step.status === 'success';
-          const isClickable =
+          const isAccessible =
             index === 0 ||
             (index === 1 && canProceedToAuth) ||
             (index === 2 && canProceedToConfirm);
@@ -219,9 +216,7 @@ export function ConfigEditor(props: Props) {
                 <div
                   className={css`
                     ${styles.stepConnector};
-                    ${isCompleted || (index === 1 && canProceedToAuth) || (index === 2 && canProceedToConfirm)
-                      ? styles.stepConnectorActive
-                      : ''}
+                    ${isAccessible ? styles.stepConnectorActive : ''}
                   `}
                   data-testid={`wizard-connector-${index}`}
                 />
@@ -231,8 +226,8 @@ export function ConfigEditor(props: Props) {
                 className={`${styles.stepButton} ${isActive ? styles.stepButtonActive : ''} ${
                   isCompleted ? styles.stepButtonCompleted : ''
                 }`}
-                onClick={() => isClickable && goToStep(index)}
-                disabled={!isClickable}
+                onClick={() => isAccessible && goToStep(index)}
+                disabled={!isAccessible}
                 data-testid={`wizard-step-${index}`}
               >
                 <div className={styles.stepIcon}>
@@ -358,7 +353,7 @@ export function ConfigEditor(props: Props) {
                 </div>
               )}
               <div className={styles.fieldHint}>
-                You can find your API token in NocoDB under Team &amp; Settings → API Tokens.
+                {"You can find your API token in NocoDB under Team & Settings → API Tokens."}
               </div>
             </div>
 
@@ -420,7 +415,7 @@ export function ConfigEditor(props: Props) {
               Configuration Summary
             </h4>
             <p className={styles.stepDescription}>
-              Review your settings below. Click &quot;Save &amp; Test&quot; to apply.
+              {"Review your settings below. Click \"Save & Test\" to apply."}
             </p>
 
             <div className={styles.summaryCard}>
@@ -465,8 +460,7 @@ export function ConfigEditor(props: Props) {
             </div>
 
             <Alert title="Ready to save" severity="info" data-testid="confirm-info">
-              All validations have passed. Click the &quot;Save &amp; Test&quot; button below to save your
-              datasource configuration.
+              {"All validations have passed. Click the \"Save & Test\" button below to save your datasource configuration."}
             </Alert>
           </div>
         )}
