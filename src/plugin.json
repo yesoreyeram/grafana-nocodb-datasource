@@ -1,0 +1,26 @@
+{
+  "type": "datasource",
+  "name": "NocoDB",
+  "id": "yesoreyeram-nocodb-datasource",
+  "metrics": true,
+  "backend": true,
+  "executable": "gpx_nocodb_datasource",
+  "info": {
+    "description": "Grafana datasource plugin for NocoDB",
+    "author": {
+      "name": "Sriramajeyam Sugumaran",
+      "url": "https://github.com/yesoreyeram"
+    },
+    "keywords": ["datasource", "nocodb", "database"],
+    "logos": {
+      "small": "img/logo.svg",
+      "large": "img/logo.svg"
+    },
+    "version": "0.1.0",
+    "updated": "2024-01-01"
+  },
+  "dependencies": {
+    "grafanaDependency": ">=10.0.0",
+    "plugins": []
+  }
+}
