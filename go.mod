@@ -6,6 +6,7 @@ toolchain go1.24.13
 
 require (
 	github.com/grafana/grafana-plugin-sdk-go v0.268.0
+	github.com/magefile/mage v1.15.0
 	github.com/stretchr/testify v1.10.0
 )
 
@@ -45,7 +46,6 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
-	github.com/magefile/mage v1.15.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattetti/filebuffer v1.0.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
