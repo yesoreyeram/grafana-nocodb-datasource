@@ -302,3 +302,115 @@ func TestIsTimeField(t *testing.T) {
 	assert.False(t, isTimeField("name"))
 	assert.False(t, isTimeField("id"))
 }
+
+func TestHandleValidateConnection(t *testing.T) {
+	t.Run("successful connection", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status":"ok"}`))
+		}))
+		defer server.Close()
+
+		ds := newTestDatasource(t, server.URL)
+
+		req := httptest.NewRequest(http.MethodGet, "/validate-connection", nil)
+		rec := httptest.NewRecorder()
+
+		ds.handleValidateConnection(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var resp resourceResponse
+		json.NewDecoder(rec.Body).Decode(&resp)
+		assert.Equal(t, "success", resp.Status)
+		assert.Contains(t, resp.Message, "Successfully connected")
+	})
+
+	t.Run("connection failure", func(t *testing.T) {
+		ds := newTestDatasource(t, "http://localhost:1")
+
+		req := httptest.NewRequest(http.MethodGet, "/validate-connection", nil)
+		rec := httptest.NewRecorder()
+
+		ds.handleValidateConnection(rec, req)
+
+		assert.Equal(t, http.StatusBadGateway, rec.Code)
+
+		var resp resourceResponse
+		json.NewDecoder(rec.Body).Decode(&resp)
+		assert.Equal(t, "error", resp.Status)
+		assert.Contains(t, resp.Message, "Connection failed")
+	})
+
+	t.Run("wrong method", func(t *testing.T) {
+		ds := newTestDatasource(t, "http://localhost:1")
+
+		req := httptest.NewRequest(http.MethodPost, "/validate-connection", nil)
+		rec := httptest.NewRecorder()
+
+		ds.handleValidateConnection(rec, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	})
+}
+
+func TestHandleValidateAuth(t *testing.T) {
+	t.Run("successful auth", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/api/v1/auth/user/me" {
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(`{"id":"user-1","email":"test@example.com"}`))
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer server.Close()
+
+		ds := newTestDatasource(t, server.URL)
+
+		req := httptest.NewRequest(http.MethodGet, "/validate-auth", nil)
+		rec := httptest.NewRecorder()
+
+		ds.handleValidateAuth(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var resp resourceResponse
+		json.NewDecoder(rec.Body).Decode(&resp)
+		assert.Equal(t, "success", resp.Status)
+		assert.Contains(t, resp.Message, "API token is valid")
+	})
+
+	t.Run("auth failure", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"msg":"Unauthorized"}`))
+		}))
+		defer server.Close()
+
+		ds := newTestDatasource(t, server.URL)
+
+		req := httptest.NewRequest(http.MethodGet, "/validate-auth", nil)
+		rec := httptest.NewRecorder()
+
+		ds.handleValidateAuth(rec, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
+
+		var resp resourceResponse
+		json.NewDecoder(rec.Body).Decode(&resp)
+		assert.Equal(t, "error", resp.Status)
+		assert.Contains(t, resp.Message, "Authentication failed")
+	})
+
+	t.Run("wrong method", func(t *testing.T) {
+		ds := newTestDatasource(t, "http://localhost:1")
+
+		req := httptest.NewRequest(http.MethodPost, "/validate-auth", nil)
+		rec := httptest.NewRecorder()
+
+		ds.handleValidateAuth(rec, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	})
+}

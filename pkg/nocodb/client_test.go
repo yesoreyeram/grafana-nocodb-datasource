@@ -157,3 +157,114 @@ func TestHealthCheck(t *testing.T) {
 		assert.Contains(t, err.Error(), "executing health check")
 	})
 }
+
+func TestCheckConnection(t *testing.T) {
+	t.Run("successful connection", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method)
+			assert.Equal(t, "/api/v1/health", r.URL.Path)
+			// Should NOT have xc-token header for connection check
+			assert.Empty(t, r.Header.Get("xc-token"))
+
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status":"ok"}`))
+		}))
+		defer server.Close()
+
+		client := NewClientWithHTTPClient(server.URL, "test-token", server.Client())
+		err := client.CheckConnection(context.Background())
+
+		require.NoError(t, err)
+	})
+
+	t.Run("server returns 401 still means reachable", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"error":"unauthorized"}`))
+		}))
+		defer server.Close()
+
+		client := NewClientWithHTTPClient(server.URL, "test-token", server.Client())
+		err := client.CheckConnection(context.Background())
+
+		// Even 401 means the server is reachable
+		require.NoError(t, err)
+	})
+
+	t.Run("connection error", func(t *testing.T) {
+		client := NewClient("http://localhost:1", "test-token")
+		err := client.CheckConnection(context.Background())
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "connecting to NocoDB")
+	})
+}
+
+func TestValidateAuth(t *testing.T) {
+	t.Run("successful auth", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method)
+			assert.Equal(t, "/api/v1/auth/user/me", r.URL.Path)
+			assert.Equal(t, "test-token", r.Header.Get("xc-token"))
+
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"id":"user-1","email":"test@example.com"}`))
+		}))
+		defer server.Close()
+
+		client := NewClientWithHTTPClient(server.URL, "test-token", server.Client())
+		err := client.ValidateAuth(context.Background())
+
+		require.NoError(t, err)
+	})
+
+	t.Run("invalid token - 401", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"msg":"Unauthorized"}`))
+		}))
+		defer server.Close()
+
+		client := NewClientWithHTTPClient(server.URL, "bad-token", server.Client())
+		err := client.ValidateAuth(context.Background())
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "authentication failed: invalid API token")
+	})
+
+	t.Run("forbidden - 403", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`{"msg":"Forbidden"}`))
+		}))
+		defer server.Close()
+
+		client := NewClientWithHTTPClient(server.URL, "bad-token", server.Client())
+		err := client.ValidateAuth(context.Background())
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "authentication failed: invalid API token")
+	})
+
+	t.Run("server error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`{"error":"internal error"}`))
+		}))
+		defer server.Close()
+
+		client := NewClientWithHTTPClient(server.URL, "test-token", server.Client())
+		err := client.ValidateAuth(context.Background())
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "auth validation failed with status 500")
+	})
+
+	t.Run("connection error", func(t *testing.T) {
+		client := NewClient("http://localhost:1", "test-token")
+		err := client.ValidateAuth(context.Background())
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "validating authentication")
+	})
+}

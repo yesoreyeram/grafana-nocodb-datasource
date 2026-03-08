@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/resource/httpadapter"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 
 	"github.com/yesoreyeram/grafana-nocodb-datasource/pkg/models"
@@ -17,11 +19,13 @@ import (
 
 var _ backend.QueryDataHandler = (*Datasource)(nil)
 var _ backend.CheckHealthHandler = (*Datasource)(nil)
+var _ backend.CallResourceHandler = (*Datasource)(nil)
 
 // Datasource is the NocoDB datasource plugin implementation.
 type Datasource struct {
-	client *nocodb.Client
-	logger log.Logger
+	client          *nocodb.Client
+	logger          log.Logger
+	resourceHandler backend.CallResourceHandler
 }
 
 // NewDatasource creates a new datasource instance.
@@ -42,10 +46,17 @@ func NewDatasource(_ context.Context, settings backend.DataSourceInstanceSetting
 
 	client := nocodb.NewClient(s.BaseURL, apiToken)
 
-	return &Datasource{
+	ds := &Datasource{
 		client: client,
 		logger: log.DefaultLogger,
-	}, nil
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/validate-connection", ds.handleValidateConnection)
+	mux.HandleFunc("/validate-auth", ds.handleValidateAuth)
+	ds.resourceHandler = httpadapter.New(mux)
+
+	return ds, nil
 }
 
 // Dispose cleans up the datasource resources.
@@ -190,4 +201,72 @@ func (d *Datasource) CheckHealth(ctx context.Context, _ *backend.CheckHealthRequ
 		Status:  backend.HealthStatusOk,
 		Message: "Successfully connected to NocoDB",
 	}, nil
+}
+
+// CallResource handles resource calls from the frontend.
+func (d *Datasource) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
+	return d.resourceHandler.CallResource(ctx, req, sender)
+}
+
+// resourceResponse is the JSON response structure for resource calls.
+type resourceResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
+// handleValidateConnection validates that the NocoDB instance is reachable.
+func (d *Datasource) handleValidateConnection(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeResourceJSON(w, http.StatusMethodNotAllowed, resourceResponse{
+			Status:  "error",
+			Message: "Method not allowed",
+		})
+		return
+	}
+
+	err := d.client.CheckConnection(r.Context())
+	if err != nil {
+		writeResourceJSON(w, http.StatusBadGateway, resourceResponse{
+			Status:  "error",
+			Message: fmt.Sprintf("Connection failed: %s", err.Error()),
+		})
+		return
+	}
+
+	writeResourceJSON(w, http.StatusOK, resourceResponse{
+		Status:  "success",
+		Message: "Successfully connected to NocoDB instance",
+	})
+}
+
+// handleValidateAuth validates that the API token is valid.
+func (d *Datasource) handleValidateAuth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeResourceJSON(w, http.StatusMethodNotAllowed, resourceResponse{
+			Status:  "error",
+			Message: "Method not allowed",
+		})
+		return
+	}
+
+	err := d.client.ValidateAuth(r.Context())
+	if err != nil {
+		writeResourceJSON(w, http.StatusUnauthorized, resourceResponse{
+			Status:  "error",
+			Message: fmt.Sprintf("Authentication failed: %s", err.Error()),
+		})
+		return
+	}
+
+	writeResourceJSON(w, http.StatusOK, resourceResponse{
+		Status:  "success",
+		Message: "API token is valid",
+	})
+}
+
+// writeResourceJSON writes a JSON response to the http.ResponseWriter.
+func writeResourceJSON(w http.ResponseWriter, statusCode int, body interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(body)
 }
