@@ -5,12 +5,24 @@ A Grafana backend datasource plugin for [NocoDB](https://nocodb.com/) — the op
 ## Features
 
 - **Backend plugin** with secure credential handling (API tokens stored encrypted)
+- **Wizard-style configuration** with step-by-step validation
 - Query NocoDB tables with field selection, filtering, sorting, and pagination
 - Health check endpoint for connection validation
 - Template variable support in queries
 - Production-grade with comprehensive unit and E2E tests
 
 ## Configuration
+
+The datasource configuration uses a 3-step wizard that validates each step before proceeding:
+
+### Step 1: Connection
+Enter the base URL of your NocoDB instance. The plugin validates that the server is reachable via a backend resource call before allowing you to proceed.
+
+### Step 2: Authentication
+Enter your NocoDB API token (found in NocoDB under Team & Settings → API Tokens). The plugin validates the token against the NocoDB API before allowing you to proceed. The token is stored securely in Grafana's encrypted store.
+
+### Step 3: Confirmation
+Review your configuration summary. All validations must pass before you can save.
 
 ### Data Source Settings
 
