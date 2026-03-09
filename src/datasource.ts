@@ -70,9 +70,10 @@ export class NocoDBDataSource extends DataSourceApi<NocoDBQuery, NocoDBDataSourc
         url: `/api/datasources/${this.id}/health`,
         method: 'GET',
       });
+      const data = result?.data as { message?: string } | undefined;
       return {
         status: 'success',
-        message: result?.data?.message || 'Successfully connected to NocoDB',
+        message: data?.message || 'Successfully connected to NocoDB',
       };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';

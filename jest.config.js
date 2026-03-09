@@ -13,6 +13,11 @@ module.exports = {
             decorators: false,
             dynamicImport: true,
           },
+          transform: {
+            react: {
+              runtime: 'automatic',
+            },
+          },
         },
       },
     ],

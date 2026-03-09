@@ -1,6 +1,7 @@
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { ConfigEditor } from '../components/ConfigEditor';
+import { of, throwError } from 'rxjs';
 
 // Mock @grafana/runtime
 const mockFetch = jest.fn();
@@ -50,7 +51,7 @@ jest.mock('@grafana/ui', () => ({
       type="password"
     />
   ),
-  Spinner: () => <span data-testid="spinner" />,
+  Spinner: ({ inline }: any) => <span data-testid="spinner" />,
   useStyles2: (fn: any) => {
     // Return a proxy that returns empty string for any property
     return new Proxy(
@@ -167,6 +168,21 @@ describe('ConfigEditor', () => {
     expect(screen.getByTestId('nocodb-config-base-url')).toHaveValue('http://existing-url.com');
   });
 
+  it('should strip trailing slashes from base URL on change', () => {
+    render(<ConfigEditor {...defaultProps} />);
+
+    const input = screen.getByTestId('nocodb-config-base-url');
+    fireEvent.change(input, { target: { value: 'http://localhost:8080/' } });
+
+    expect(defaultProps.onOptionsChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jsonData: expect.objectContaining({
+          baseURL: 'http://localhost:8080',
+        }),
+      })
+    );
+  });
+
   // --- Frontend URL Validation ---
 
   it('should show error when base URL is empty and test connection is clicked', () => {
@@ -197,6 +213,298 @@ describe('ConfigEditor', () => {
 
     expect(screen.getByTestId('base-url-error')).toBeInTheDocument();
     expect(screen.getByTestId('base-url-error')).toHaveTextContent('URL must start with http:// or https://');
+  });
+
+  it('should not call backend when frontend validation fails', () => {
+    render(<ConfigEditor {...defaultProps} />);
+
+    const button = screen.getByTestId('test-connection-button');
+    fireEvent.click(button);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  // --- Backend connection test ---
+
+  it('should show success alert after successful connection test', async () => {
+    mockFetch.mockReturnValue(
+      of({ data: { status: 'success', message: 'Successfully connected to NocoDB instance' } })
+    );
+
+    const props = {
+      ...defaultProps,
+      options: {
+        ...defaultProps.options,
+        jsonData: { baseURL: 'http://localhost:8080' },
+      },
+    };
+
+    render(<ConfigEditor {...props} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('test-connection-button'));
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: '/api/datasources/1/resources/validate-connection',
+        method: 'GET',
+      })
+    );
+    expect(screen.getByTestId('connection-success')).toBeInTheDocument();
+  });
+
+  it('should show error alert after failed connection test', async () => {
+    mockFetch.mockReturnValue(
+      throwError(() => new Error('Connection refused'))
+    );
+
+    const props = {
+      ...defaultProps,
+      options: {
+        ...defaultProps.options,
+        jsonData: { baseURL: 'http://localhost:9999' },
+      },
+    };
+
+    render(<ConfigEditor {...props} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('test-connection-button'));
+    });
+
+    expect(screen.getByTestId('connection-error')).toBeInTheDocument();
+  });
+
+  it('should enable auth step after successful connection', async () => {
+    mockFetch.mockReturnValue(
+      of({ data: { status: 'success', message: 'Connected' } })
+    );
+
+    const props = {
+      ...defaultProps,
+      options: {
+        ...defaultProps.options,
+        jsonData: { baseURL: 'http://localhost:8080' },
+      },
+    };
+
+    render(<ConfigEditor {...props} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('test-connection-button'));
+    });
+
+    const authStep = screen.getByTestId('wizard-step-1');
+    expect(authStep).not.toBeDisabled();
+  });
+
+  it('should show Next button after successful connection', async () => {
+    mockFetch.mockReturnValue(
+      of({ data: { status: 'success', message: 'Connected' } })
+    );
+
+    const props = {
+      ...defaultProps,
+      options: {
+        ...defaultProps.options,
+        jsonData: { baseURL: 'http://localhost:8080' },
+      },
+    };
+
+    render(<ConfigEditor {...props} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('test-connection-button'));
+    });
+
+    expect(screen.getByTestId('next-to-auth-button')).toBeInTheDocument();
+  });
+
+  it('should navigate to auth step when Next button is clicked', async () => {
+    mockFetch.mockReturnValue(
+      of({ data: { status: 'success', message: 'Connected' } })
+    );
+
+    const props = {
+      ...defaultProps,
+      options: {
+        ...defaultProps.options,
+        jsonData: { baseURL: 'http://localhost:8080' },
+      },
+    };
+
+    render(<ConfigEditor {...props} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('test-connection-button'));
+    });
+
+    fireEvent.click(screen.getByTestId('next-to-auth-button'));
+
+    expect(screen.getByTestId('wizard-panel-auth')).toBeInTheDocument();
+    expect(screen.getByTestId('nocodb-config-api-token')).toBeInTheDocument();
+  });
+
+  // --- Auth step tests ---
+
+  it('should show API token error when token is empty and verify is clicked', async () => {
+    mockFetch.mockReturnValue(
+      of({ data: { status: 'success', message: 'Connected' } })
+    );
+
+    const props = {
+      ...defaultProps,
+      options: {
+        ...defaultProps.options,
+        jsonData: { baseURL: 'http://localhost:8080' },
+      },
+    };
+
+    render(<ConfigEditor {...props} />);
+
+    // Navigate to auth step
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('test-connection-button'));
+    });
+    fireEvent.click(screen.getByTestId('next-to-auth-button'));
+
+    // Click verify without entering token
+    fireEvent.click(screen.getByTestId('test-auth-button'));
+
+    expect(screen.getByTestId('api-token-error')).toBeInTheDocument();
+    expect(screen.getByTestId('api-token-error')).toHaveTextContent('API token is required');
+  });
+
+  it('should show error for short API token', async () => {
+    mockFetch.mockReturnValue(
+      of({ data: { status: 'success', message: 'Connected' } })
+    );
+
+    const props = {
+      ...defaultProps,
+      options: {
+        ...defaultProps.options,
+        jsonData: { baseURL: 'http://localhost:8080' },
+        secureJsonData: { apiToken: 'short' },
+      },
+    };
+
+    render(<ConfigEditor {...props} />);
+
+    // Navigate to auth step
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('test-connection-button'));
+    });
+    fireEvent.click(screen.getByTestId('next-to-auth-button'));
+
+    // Click verify with short token
+    fireEvent.click(screen.getByTestId('test-auth-button'));
+
+    expect(screen.getByTestId('api-token-error')).toBeInTheDocument();
+    expect(screen.getByTestId('api-token-error')).toHaveTextContent('API token must be at least 8 characters');
+  });
+
+  it('should navigate back to connection step from auth step', async () => {
+    mockFetch.mockReturnValue(
+      of({ data: { status: 'success', message: 'Connected' } })
+    );
+
+    const props = {
+      ...defaultProps,
+      options: {
+        ...defaultProps.options,
+        jsonData: { baseURL: 'http://localhost:8080' },
+      },
+    };
+
+    render(<ConfigEditor {...props} />);
+
+    // Navigate to auth step
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('test-connection-button'));
+    });
+    fireEvent.click(screen.getByTestId('next-to-auth-button'));
+    expect(screen.getByTestId('wizard-panel-auth')).toBeInTheDocument();
+
+    // Navigate back
+    fireEvent.click(screen.getByTestId('back-to-connection-button'));
+    expect(screen.getByTestId('wizard-panel-connection')).toBeInTheDocument();
+  });
+
+  // --- Full wizard flow ---
+
+  it('should complete full wizard flow: connection → auth → confirm', async () => {
+    // First call: connection success, second call: auth success
+    mockFetch
+      .mockReturnValueOnce(of({ data: { status: 'success', message: 'Connected' } }))
+      .mockReturnValueOnce(of({ data: { status: 'success', message: 'Token valid' } }));
+
+    const props = {
+      ...defaultProps,
+      options: {
+        ...defaultProps.options,
+        jsonData: { baseURL: 'http://localhost:8080' },
+        secureJsonData: { apiToken: 'valid-api-token-12345' },
+      },
+    };
+
+    render(<ConfigEditor {...props} />);
+
+    // Step 1: Test connection
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('test-connection-button'));
+    });
+    expect(screen.getByTestId('connection-success')).toBeInTheDocument();
+
+    // Navigate to auth
+    fireEvent.click(screen.getByTestId('next-to-auth-button'));
+    expect(screen.getByTestId('wizard-panel-auth')).toBeInTheDocument();
+
+    // Step 2: Test auth
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('test-auth-button'));
+    });
+    expect(screen.getByTestId('auth-success')).toBeInTheDocument();
+
+    // Navigate to confirmation
+    fireEvent.click(screen.getByTestId('next-to-confirm-button'));
+    expect(screen.getByTestId('wizard-panel-confirm')).toBeInTheDocument();
+    expect(screen.getByTestId('summary-base-url')).toHaveTextContent('http://localhost:8080');
+    expect(screen.getByTestId('confirm-info')).toBeInTheDocument();
+  });
+
+  it('should show auth error alert on failed auth verification', async () => {
+    mockFetch
+      .mockReturnValueOnce(of({ data: { status: 'success', message: 'Connected' } }))
+      .mockReturnValueOnce(throwError(() => new Error('Unauthorized')));
+
+    const props = {
+      ...defaultProps,
+      options: {
+        ...defaultProps.options,
+        jsonData: { baseURL: 'http://localhost:8080' },
+        secureJsonData: { apiToken: 'invalid-token-12345' },
+      },
+    };
+
+    render(<ConfigEditor {...props} />);
+
+    // Step 1: connection success
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('test-connection-button'));
+    });
+    fireEvent.click(screen.getByTestId('next-to-auth-button'));
+
+    // Step 2: auth fails
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('test-auth-button'));
+    });
+    expect(screen.getByTestId('auth-error')).toBeInTheDocument();
+
+    // Confirm step should still be disabled
+    const confirmStep = screen.getByTestId('wizard-step-2');
+    expect(confirmStep).toBeDisabled();
   });
 });
 

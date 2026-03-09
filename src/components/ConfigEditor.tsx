@@ -1,8 +1,7 @@
 import React, { useState, useCallback, ChangeEvent } from 'react';
 import { css } from '@emotion/css';
-import { GrafanaTheme2 } from '@grafana/data';
+import { GrafanaTheme2, DataSourcePluginOptionsEditorProps } from '@grafana/data';
 import { Alert, Button, Icon, Input, SecretInput, Spinner, useStyles2 } from '@grafana/ui';
-import { DataSourcePluginOptionsEditorProps } from '@grafana/data';
 import { getBackendSrv } from '@grafana/runtime';
 import { NocoDBDataSourceOptions, NocoDBSecureJsonData } from '../types';
 
@@ -214,10 +213,7 @@ export function ConfigEditor(props: Props) {
             <React.Fragment key={step.label}>
               {index > 0 && (
                 <div
-                  className={css`
-                    ${styles.stepConnector};
-                    ${isAccessible ? styles.stepConnectorActive : ''}
-                  `}
+                  className={`${styles.stepConnector} ${isAccessible ? styles.stepConnectorActive : ''}`}
                   data-testid={`wizard-connector-${index}`}
                 />
               )}
@@ -230,7 +226,7 @@ export function ConfigEditor(props: Props) {
                 disabled={!isAccessible}
                 data-testid={`wizard-step-${index}`}
               >
-                <div className={styles.stepIcon}>
+                <div className={`${styles.stepIcon} ${isActive ? styles.stepIconActive : ''} ${isCompleted ? styles.stepIconCompleted : ''}`}>
                   {isCompleted ? (
                     <Icon name="check" size="lg" />
                   ) : step.status === 'loading' ? (
@@ -239,7 +235,7 @@ export function ConfigEditor(props: Props) {
                     <span className={styles.stepNumber}>{index + 1}</span>
                   )}
                 </div>
-                <span className={styles.stepLabel}>{step.label}</span>
+                <span className={`${styles.stepLabel} ${isActive ? styles.stepLabelActive : ''}`}>{step.label}</span>
               </button>
             </React.Fragment>
           );
@@ -527,15 +523,28 @@ function getStyles(theme: GrafanaTheme2) {
       transition: all 0.3s ease;
       color: ${theme.colors.text.secondary};
     `,
+    stepIconActive: css`
+      border-color: ${theme.colors.primary.main};
+      color: ${theme.colors.primary.main};
+    `,
+    stepIconCompleted: css`
+      border-color: ${theme.colors.success.main};
+      background: ${theme.colors.success.main};
+      color: ${theme.colors.success.contrastText};
+    `,
     stepNumber: css`
       font-size: ${theme.typography.h5.fontSize};
       font-weight: ${theme.typography.fontWeightBold};
-      color: ${theme.colors.text.secondary};
+      color: inherit;
     `,
     stepLabel: css`
       font-size: ${theme.typography.bodySmall.fontSize};
       color: ${theme.colors.text.secondary};
       font-weight: ${theme.typography.fontWeightMedium};
+    `,
+    stepLabelActive: css`
+      color: ${theme.colors.text.primary};
+      font-weight: ${theme.typography.fontWeightBold};
     `,
     stepContent: css`
       min-height: 300px;
