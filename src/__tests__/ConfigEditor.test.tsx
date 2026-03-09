@@ -51,7 +51,7 @@ jest.mock('@grafana/ui', () => ({
       type="password"
     />
   ),
-  Spinner: ({ inline }: any) => <span data-testid="spinner" />,
+  Spinner: () => <span data-testid="spinner" />,
   useStyles2: (fn: any) => {
     // Return a proxy that returns empty string for any property
     return new Proxy(
